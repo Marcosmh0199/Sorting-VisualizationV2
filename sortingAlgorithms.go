@@ -152,7 +152,7 @@ func barChartDriver(slice []float64) {
 	defer ui.Close()
 	initSortChart(slice)
 	ui.Render(&sortChart)
-	displayHelp()
+	//displayHelp()
 	uiEvents := ui.PollEvents()
 	for {
 		select {
@@ -189,7 +189,7 @@ func initSortChart(slice []float64)  {
 	sortChart = *widgets.NewBarChart()
 	sortChart.Data = slice
 	sortChart.Title = "Sort"
-	sortChart.SetRect(0, 0, width, height)
+	sortChart.SetRect(100, 0, width, height)
 	sortChart.BarWidth = 3
 	sortChart.BarGap = 0
 	sortChart.BarColors = []ui.Color{ui.ColorRed}

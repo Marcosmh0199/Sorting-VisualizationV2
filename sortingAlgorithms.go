@@ -17,15 +17,17 @@ import (
 	"time"
 )
 
-var width int = int(win.GetSystemMetrics(win.SM_CXSCREEN) / 8)
-var height int = int(win.GetSystemMetrics(win.SM_CYSCREEN) / 24)
-var sortChart widgets.BarChart
-var primes []int
-
+const FONT_WIDTH = 8
+const FONT_HEIGHT = 16
 const MAX_NUMBER_SIZE = 32
 const SLICE_SIZE = 50
 const MAX_PRIME = 101
 const MILI_SECONDS = 10
+
+var width int = int(win.GetSystemMetrics(win.SM_CXSCREEN) / FONT_WIDTH)
+var height int = int(win.GetSystemMetrics(win.SM_CYSCREEN) / (FONT_HEIGHT*2))
+var sortChart widgets.BarChart
+var primes []int
 
 func main() {
 	slice := randomSlice(MAX_PRIME)
@@ -189,7 +191,7 @@ func initSortChart(slice []float64)  {
 	sortChart = *widgets.NewBarChart()
 	sortChart.Data = slice
 	sortChart.Title = "Sort"
-	sortChart.SetRect(100, 0, width, height)
+	sortChart.SetRect(0, 0, width, height)
 	sortChart.BarWidth = 3
 	sortChart.BarGap = 0
 	sortChart.BarColors = []ui.Color{ui.ColorRed}

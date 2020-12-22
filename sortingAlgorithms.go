@@ -14,9 +14,11 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"strconv"
 	"time"
 )
 
+//Constants
 const FONT_WIDTH = 8
 const FONT_HEIGHT = 16
 const MAX_NUMBER_SIZE = 32
@@ -24,14 +26,14 @@ const SLICE_SIZE = 50
 const MAX_PRIME = 101
 const MILI_SECONDS = 10
 
+//global variables
 var width int = int(win.GetSystemMetrics(win.SM_CXSCREEN) / FONT_WIDTH)
 var height int = int(win.GetSystemMetrics(win.SM_CYSCREEN) / (FONT_HEIGHT*2))
-var sortChart widgets.BarChart
-var primes []int
+var bsChart widgets.BarChart
+var qsChart widgets.BarChart
 
 func main() {
 	slice := randomSlice(MAX_PRIME)
-	generatePrimes()
 	barChartDriver(slice)
 }
 
@@ -42,23 +44,8 @@ func remove(slice []int, index int) []int {
 /*
 the sieve of eratosthenes algorithm, used to generate prime number in certain range
 */
-func generatePrimes(){
-	var booleans = make([]bool, MAX_PRIME)
-	for i := range booleans{
-		booleans[i] = true
-	}
-	for i := 2; i*i <= MAX_PRIME; i++{
-		if booleans[i] == true {
-			for j := i*i; j <= MAX_PRIME; j += i{
-				booleans[j] = false
-			}
-		}
-	}
-	for i := 2; i < MAX_PRIME; i++{
-		if booleans[i]{
-			primes = append(primes, i)
-		}
-	}
+func generateSeed() int{
+	return 0
 }
 
 /*
@@ -143,7 +130,7 @@ func displayHelp(){
 }
 
 func updateChart(){
-	ui.Render(&sortChart)
+	ui.Render(&bsChart)
 	time.Sleep(MILI_SECONDS * time.Millisecond)
 }
 
@@ -152,34 +139,35 @@ func barChartDriver(slice []float64) {
 		log.Fatalf("failed to initialize termui: %v", err)
 	}
 	defer ui.Close()
-	initSortChart(slice)
-	ui.Render(&sortChart)
-	//displayHelp()
+	initBsChart(slice)
+	initQsChart(slice)
+	ui.Render(&bsChart)
+	ui.Render(&qsChart)
 	uiEvents := ui.PollEvents()
 	for {
 		select {
 		case e := <-uiEvents:
 			switch e.ID {
 			case "1":
-				sortChart.Title = "QuickSort"
-				sortChart.Data = make([]float64, len(slice))
-				copy(sortChart.Data, slice)
-				quickSort(sortChart.Data)
+				bsChart.Title = "QuickSort"
+				bsChart.Data = make([]float64, len(slice))
+				copy(bsChart.Data, slice)
+				quickSort(bsChart.Data)
 			case "2":
-				sortChart.Title = "BubbleSort"
-				sortChart.Data = make([]float64, len(slice))
-				copy(sortChart.Data, slice)
-				bubbleSort(sortChart.Data)
+				bsChart.Title = "BubbleSort"
+				bsChart.Data = make([]float64, len(slice))
+				copy(bsChart.Data, slice)
+				bubbleSort(bsChart.Data)
 			case "3":
-				sortChart.Title = "Sort"
-				sortChart.Data = make([]float64, len(slice))
-				copy(sortChart.Data, slice)
-				ui.Render(&sortChart)
+				bsChart.Title = "Sort"
+				bsChart.Data = make([]float64, len(slice))
+				copy(bsChart.Data, slice)
+				ui.Render(&bsChart)
 			case "4":
-				slice = randomSlice(primes[rand.Int() % len(primes)])
-				sortChart.Data = make([]float64, len(slice))
-				copy(sortChart.Data, slice)
-				ui.Render(&sortChart)
+				slice = randomSlice(111)
+				bsChart.Data = make([]float64, len(slice))
+				copy(bsChart.Data, slice)
+				ui.Render(&bsChart)
 			case "5":
 				return
 			}
@@ -187,13 +175,37 @@ func barChartDriver(slice []float64) {
 	}
 }
 
-func initSortChart(slice []float64)  {
-	sortChart = *widgets.NewBarChart()
-	sortChart.Data = slice
-	sortChart.Title = "Sort"
-	sortChart.SetRect(0, 0, width, height)
-	sortChart.BarWidth = 3
-	sortChart.BarGap = 0
-	sortChart.BarColors = []ui.Color{ui.ColorRed}
-	sortChart.NumStyles = []ui.Style{ui.NewStyle(ui.ColorBlack)}
+func generateLabels(slice []float64) []string {
+	var labels = make([]string, len(slice))
+	for i := range slice{
+		labels[i] = strconv.Itoa(i)
+	}
+	return labels
+}
+
+func initBsChart(slice []float64)  {
+	bsChart = *widgets.NewBarChart()
+	bsChart.Data = slice
+	bsChart.Title = "BubbleSort"
+	bsChart.SetRect(0, 0, width, height - 2)
+	bsChart.BarWidth = 3
+	bsChart.BarGap = 0
+	bsChart.Labels = generateLabels(slice)
+	bsChart.LabelStyles = []ui.Style{ui.NewStyle(ui.ColorWhite)}
+	bsChart.BorderBottom = false
+	bsChart.BarColors = []ui.Color{ui.ColorRed}
+	bsChart.NumStyles = []ui.Style{ui.NewStyle(ui.ColorBlack)}
+}
+
+func initQsChart(slice []float64){
+	qsChart = *widgets.NewBarChart()
+	qsChart.Data = slice
+	qsChart.Title = "QuickSort"
+	qsChart.SetRect(0, height-2, width, height*2 - 2)
+	qsChart.BarWidth = 3
+	qsChart.BarGap = 0
+	qsChart.Labels = generateLabels(slice)
+	qsChart.LabelStyles = []ui.Style{ui.NewStyle(ui.ColorWhite)}
+	qsChart.BarColors = []ui.Color{ui.ColorRed}
+	qsChart.NumStyles = []ui.Style{ui.NewStyle(ui.ColorBlack)}
 }

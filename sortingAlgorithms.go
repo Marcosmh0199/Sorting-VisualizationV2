@@ -8,6 +8,7 @@ en una terminal a pantalla completa.
 package main
 
 import (
+	"fmt"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 	"github.com/lxn/win"
@@ -22,7 +23,6 @@ import (
 const FONT_WIDTH = 8
 const FONT_HEIGHT = 16
 const MAX_NUMBER_SIZE = 32
-const SLICE_SIZE = 50
 const MAX_PRIME = 101
 const MILI_SECONDS = 10
 
@@ -33,31 +33,39 @@ var bsChart widgets.BarChart
 var qsChart widgets.BarChart
 
 func main() {
-	slice := randomSlice(MAX_PRIME)
-	barChartDriver(slice)
-}
-
-func remove(slice []int, index int) []int {
-	return append(slice[:index], slice[index+1:]...)
+	fmt.Print("Indique el tamaño del slice: ")
+	var first int
+	fmt.Scanln(&first)
+	slice := randomSlice(MAX_PRIME, first)
+	//barChartDriver(slice)
+	if err := ui.Init(); err != nil {
+		log.Fatalf("failed to initialize termui: %v", err)
+	}
+	defer ui.Close()
+	initBsChart(slice)
+	initQsChart(slice)
+	ui.Render(&bsChart)
+	ui.Render(&qsChart)
+	bsChartDrawer(slice)
 }
 
 /*
-the sieve of eratosthenes algorithm, used to generate prime number in certain range
+Generates a prime number from the system hour
 */
 func generateSeed() int{
-	return 0
+	return 111
 }
 
 /*
 creates a N size slice with random numbers based on the linear congruential method using only the seed as param
 output: slice with N random integers
  */
-func randomSlice(seed int) []float64{
-	var slice = make([]float64, SLICE_SIZE)
+func randomSlice(seed int, size int) []float64{
+	var slice = make([]float64, size)
 	var m = int(math.Pow(2, MAX_NUMBER_SIZE))  // modulus
 	var a = 22695477                    // multiplier
 	var c = 1                           //increment
-	for i := 0; i < SLICE_SIZE; i++ {
+	for i := 0; i < size; i++ {
 		seed = (a * seed + c) % m
 		slice[i] = float64(seed % MAX_NUMBER_SIZE) //cast to make the slice values compatible with the barChart
 	}
@@ -73,15 +81,14 @@ func swap (a *float64, b *float64){
 	*b = temp
 }
 
-func bubbleSort(slice []float64) []float64{
+func bubbleSort(slice []float64, pair chan []int){
 	n := len(slice) - 1
 	for true {
 		swapped := false
 		for i := 0; i < n; i++{
 			if slice[i] > slice[i+1]{
-				swap(&slice[i], &slice[i+1])
+				pair <- []int{i, i+1}
 				swapped = true
-				updateChart() //update the barChart, not related to Bubblesort
 			}
 		}
 		if !swapped{
@@ -89,10 +96,10 @@ func bubbleSort(slice []float64) []float64{
 		}
 		n--
 	}
-	return slice
+	close(pair)
 }
 
-func quickSort(slice []float64) []float64 {
+func quickSort(slice []float64, pair chan []int) []float64 {
 	if len(slice) < 2 {
 		return slice
 	}
@@ -105,7 +112,6 @@ func quickSort(slice []float64) []float64 {
 	for i := range slice {
 		if slice[i] < slice[high] {
 			swap(&slice[i], &slice[low])
-			updateChart() //update the barChart, not related to Quicksort
 			low++
 		}
 	}
@@ -115,34 +121,31 @@ func quickSort(slice []float64) []float64 {
 	return slice
 }
 
-func displayHelp(){
-	for i := int(win.GetSystemMetrics(win.SM_CYSCREEN) / 24); i > 0; i-- {
-		println("")
+func qsChartDrawer(slice []float64){
+	qsChart.Data = make([]float64, len(slice))
+	copy(qsChart.Data, slice)
+	pairsChannel := make(chan []int)
+	go quickSort(qsChart.Data, pairsChannel)
+	for pair := range pairsChannel{
+		swap(&qsChart.Data[pair[0]], &qsChart.Data[pair[1]])
+		ui.Render(&qsChart)
+		time.Sleep(MILI_SECONDS * time.Millisecond)
 	}
-	println("______________________________________________ ")
-	println("|Comandos:                                   | ")
-	println("|1: Ejecutar quicksort sobre el slice actual | ")
-	println("|2: Ejecutar bubblesort sobre el slice actual| ")
-	println("|3: Regresar el slice a su estado original   | ")
-	println("|4: Crear un slice nuevo                     | ")
-	println("|5: Salir                                    | ")
-	println("---------------------------------------------- ")
 }
 
-func updateChart(){
-	ui.Render(&bsChart)
-	time.Sleep(MILI_SECONDS * time.Millisecond)
+func bsChartDrawer(slice []float64)  {
+	bsChart.Data = make([]float64, len(slice))
+	copy(bsChart.Data, slice)
+	pairsChannel := make(chan []int)
+	go bubbleSort(bsChart.Data, pairsChannel)
+	for pair := range pairsChannel{
+		swap(&bsChart.Data[pair[0]], &bsChart.Data[pair[1]])
+		ui.Render(&bsChart)
+		time.Sleep(MILI_SECONDS * time.Millisecond)
+	}
 }
 
 func barChartDriver(slice []float64) {
-	if err := ui.Init(); err != nil {
-		log.Fatalf("failed to initialize termui: %v", err)
-	}
-	defer ui.Close()
-	initBsChart(slice)
-	initQsChart(slice)
-	ui.Render(&bsChart)
-	ui.Render(&qsChart)
 	uiEvents := ui.PollEvents()
 	for {
 		select {
@@ -154,17 +157,14 @@ func barChartDriver(slice []float64) {
 				copy(bsChart.Data, slice)
 				quickSort(bsChart.Data)
 			case "2":
-				bsChart.Title = "BubbleSort"
-				bsChart.Data = make([]float64, len(slice))
-				copy(bsChart.Data, slice)
-				bubbleSort(bsChart.Data)
+				bsChartDrawer(slice)
 			case "3":
 				bsChart.Title = "Sort"
 				bsChart.Data = make([]float64, len(slice))
 				copy(bsChart.Data, slice)
 				ui.Render(&bsChart)
 			case "4":
-				slice = randomSlice(111)
+				slice = randomSlice(generateSeed(), 5)
 				bsChart.Data = make([]float64, len(slice))
 				copy(bsChart.Data, slice)
 				ui.Render(&bsChart)

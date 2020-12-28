@@ -16,6 +16,7 @@ import (
 	"math"
 	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,7 @@ var width int = int(win.GetSystemMetrics(win.SM_CXSCREEN) / FONT_WIDTH)
 var height int = int(win.GetSystemMetrics(win.SM_CYSCREEN) / (FONT_HEIGHT*2))
 var bsChart widgets.BarChart
 var qsChart widgets.BarChart
+var m sync.Mutex
 
 func main() {
 	fmt.Print("Indique el tamaño del slice: ")
@@ -46,8 +48,18 @@ func main() {
 	initQsChart(slice)
 	ui.Render(&bsChart)
 	ui.Render(&qsChart)
-	bsChartDrawer(slice)
-	fmt.Scanln()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		bsChartDrawer(slice)
+		wg.Done()
+	}()
+	go func() {
+		qsChartDrawer(slice)
+		wg.Done()
+	}()
+	wg.Wait()
+	//qsChartDrawer(slice)
 }
 
 /*
@@ -102,6 +114,7 @@ func bubbleSort(slice []float64, pair chan []int){
 
 func quickSort(slice []float64, pair chan []int) []float64 {
 	if len(slice) < 2 {
+		close(pair)
 		return slice
 	}
 	low := 0
@@ -109,16 +122,20 @@ func quickSort(slice []float64, pair chan []int) []float64 {
 
 	pivot := rand.Int() % len(slice)
 
-	swap(&slice[pivot], &slice[high])
+	//swap(&slice[pivot], &slice[high])
+	pair <- []int{pivot, int(high)}
 	for i := range slice {
 		if slice[i] < slice[high] {
-			swap(&slice[i], &slice[low])
+			pair <- []int{i, low}
+			//swap(&slice[i], &slice[low])
 			low++
 		}
 	}
-	swap(&slice[low], &slice[high])
-	quickSort(slice[:low], pair)
-	quickSort(slice[low+1:], pair)
+	//swap(&slice[low], &slice[high])
+	pair <- []int{low, high}
+	quickSort(slice[:low], make(chan []int))
+	quickSort(slice[low+1:], make(chan []int))
+	//close(pair)
 	return slice
 }
 
@@ -128,9 +145,11 @@ func qsChartDrawer(slice []float64){
 	pairsChannel := make(chan []int)
 	go quickSort(qsChart.Data, pairsChannel)
 	for pair := range pairsChannel{
+		m.Lock()
 		swap(&qsChart.Data[pair[0]], &qsChart.Data[pair[1]])
 		ui.Render(&qsChart)
 		time.Sleep(MILI_SECONDS * time.Millisecond)
+		m.Unlock()
 	}
 }
 
@@ -140,9 +159,11 @@ func bsChartDrawer(slice []float64)  {
 	pairsChannel := make(chan []int)
 	go bubbleSort(bsChart.Data, pairsChannel)
 	for pair := range pairsChannel{
+		m.Lock()
 		swap(&bsChart.Data[pair[0]], &bsChart.Data[pair[1]])
 		ui.Render(&bsChart)
 		time.Sleep(MILI_SECONDS * time.Millisecond)
+		m.Unlock()
 	}
 }
 

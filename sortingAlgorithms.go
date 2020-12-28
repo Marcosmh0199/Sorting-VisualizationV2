@@ -3,6 +3,7 @@ Notas:
 1. Para una visualización correcta del gráfico de barras, por favor ejecutar el programa
 en una terminal a pantalla completa.
 2. Si se quiere cambiar el tamaño del slice, modificar la constante SLICE_SIZE.
+https://www.geeksforgeeks.org/iterative-quick-sort/
 */
 
 package main
@@ -14,13 +15,14 @@ import (
 	"github.com/lxn/win"
 	"log"
 	"math"
-	"math/rand"
 	"strconv"
 	"sync"
-	"time"
 )
 
 //Constants
+const (
+	BAR_WIDTH = 3
+)
 const FONT_WIDTH = 8
 const FONT_HEIGHT = 16
 const MAX_NUMBER_SIZE = 32
@@ -35,11 +37,11 @@ var qsChart widgets.BarChart
 var m sync.Mutex
 
 func main() {
-	fmt.Print("Indique el tamaño del slice: ")
+	barNumber := width / BAR_WIDTH - 1
+	fmt.Print("Indique el tamaño del slice(Se recomienda que contenga " + strconv.Itoa(barNumber) +" elementos para una visualizacion correcta): ")
 	var first int
 	fmt.Scanln(&first)
 	slice := randomSlice(MAX_PRIME, first)
-	//barChartDriver(slice)
 	if err := ui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v", err)
 	}
@@ -48,18 +50,9 @@ func main() {
 	initQsChart(slice)
 	ui.Render(&bsChart)
 	ui.Render(&qsChart)
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		bsChartDrawer(slice)
-		wg.Done()
-	}()
-	go func() {
-		qsChartDrawer(slice)
-		wg.Done()
-	}()
-	wg.Wait()
-	//qsChartDrawer(slice)
+	go bsChartDrawer(slice)
+	go qsChartDrawer(slice)
+	fmt.Scanln()
 }
 
 /*
@@ -94,6 +87,13 @@ func swap (a *float64, b *float64){
 	*b = temp
 }
 
+/*
+Aux function to remove an element from a slice
+*/
+func remove(slice [][]int, index int) [][]int {
+	return append(slice[:index], slice[index+1:]...)
+}
+
 func bubbleSort(slice []float64, pair chan []int){
 	n := len(slice) - 1
 	for true {
@@ -112,43 +112,48 @@ func bubbleSort(slice []float64, pair chan []int){
 	close(pair)
 }
 
-func quickSort(slice []float64, pair chan []int) []float64 {
-	if len(slice) < 2 {
-		close(pair)
-		return slice
-	}
-	low := 0
-	high := len(slice)-1
-
-	pivot := rand.Int() % len(slice)
-
-	//swap(&slice[pivot], &slice[high])
-	pair <- []int{pivot, int(high)}
-	for i := range slice {
-		if slice[i] < slice[high] {
-			pair <- []int{i, low}
-			//swap(&slice[i], &slice[low])
-			low++
+func partition(slice []float64, start int, end int, pair chan []int) int {
+	pivot := slice[end]
+	index := start
+	for i := start; i < end; i++{
+		if slice[i] <= pivot{
+			pair <- []int{i,index}
+			index++
 		}
 	}
-	//swap(&slice[low], &slice[high])
-	pair <- []int{low, high}
-	quickSort(slice[:low], make(chan []int))
-	quickSort(slice[low+1:], make(chan []int))
-	//close(pair)
-	return slice
+	pair <- []int{index,end}
+	return index
+}
+
+func quickSort(slice []float64, size int, pair chan []int) {
+	var stack [][]int
+	start := 0
+	end := size
+	stack = append(stack, []int{start,end})
+	for len(stack) > 0{
+		start, end = stack[0][0],stack[0][1]
+		stack = remove(stack, 0)
+		pivot := partition(slice, start, end, pair)
+
+		if pivot-1 > start {
+			stack = append(stack, []int{start,pivot-1})
+		}
+		if pivot+1 < end {
+			stack = append(stack, []int{pivot+1,end})
+		}
+	}
+	close(pair)
 }
 
 func qsChartDrawer(slice []float64){
 	qsChart.Data = make([]float64, len(slice))
 	copy(qsChart.Data, slice)
 	pairsChannel := make(chan []int)
-	go quickSort(qsChart.Data, pairsChannel)
+	go quickSort(qsChart.Data, len(slice)-1, pairsChannel)
 	for pair := range pairsChannel{
-		m.Lock()
 		swap(&qsChart.Data[pair[0]], &qsChart.Data[pair[1]])
+		m.Lock()
 		ui.Render(&qsChart)
-		time.Sleep(MILI_SECONDS * time.Millisecond)
 		m.Unlock()
 	}
 }
@@ -159,10 +164,9 @@ func bsChartDrawer(slice []float64)  {
 	pairsChannel := make(chan []int)
 	go bubbleSort(bsChart.Data, pairsChannel)
 	for pair := range pairsChannel{
-		m.Lock()
 		swap(&bsChart.Data[pair[0]], &bsChart.Data[pair[1]])
+		m.Lock()
 		ui.Render(&bsChart)
-		time.Sleep(MILI_SECONDS * time.Millisecond)
 		m.Unlock()
 	}
 }
@@ -180,7 +184,7 @@ func initBsChart(slice []float64)  {
 	bsChart.Data = slice
 	bsChart.Title = "BubbleSort"
 	bsChart.SetRect(0, 0, width, height - 2)
-	bsChart.BarWidth = 3
+	bsChart.BarWidth = BAR_WIDTH
 	bsChart.BarGap = 0
 	bsChart.Labels = generateLabels(slice)
 	bsChart.LabelStyles = []ui.Style{ui.NewStyle(ui.ColorWhite)}

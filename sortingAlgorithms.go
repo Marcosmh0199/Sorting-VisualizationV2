@@ -1,8 +1,6 @@
 /*
-Notas: 
-1. Para una visualización correcta del gráfico de barras, por favor ejecutar el programa
-en una terminal a pantalla completa.
-2. Si se quiere cambiar el tamaño del slice, modificar la constante SLICE_SIZE.
+Notas:
+
 */
 
 package main

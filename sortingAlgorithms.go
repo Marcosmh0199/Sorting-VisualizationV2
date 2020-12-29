@@ -2,7 +2,7 @@
 Notas:
 1. Para una visualización correcta del gráfico de barras, por favor ejecutar el programa
 en una terminal a pantalla completa.
-2. Si se quiere cambiar el tamaño del slice, modificar la constante SLICE_SIZE.
+2. Para ejecutar de nuevo, presionar una tecla distinta de 0 y enter luego de que ambos algoritmos hayan acabado.
 https://www.geeksforgeeks.org/iterative-quick-sort/
 */
 
@@ -15,62 +15,79 @@ import (
 	"github.com/lxn/win"
 	"log"
 	"math"
+	"regexp"
 	"strconv"
 	"sync"
+	"time"
 )
 
-//Constants
 const (
 	BAR_WIDTH = 3
+	FONT_WIDTH = 8
+	FONT_HEIGHT = 16
+	MAX_NUMBER_SIZE = 32
 )
-const FONT_WIDTH = 8
-const FONT_HEIGHT = 16
-const MAX_NUMBER_SIZE = 32
-const MAX_PRIME = 101
-const MILI_SECONDS = 10
 
-//global variables
-var width int = int(win.GetSystemMetrics(win.SM_CXSCREEN) / FONT_WIDTH)
-var height int = int(win.GetSystemMetrics(win.SM_CYSCREEN) / (FONT_HEIGHT*2))
-var bsChart widgets.BarChart
-var qsChart widgets.BarChart
-var m sync.Mutex
+var(
+	width int = int(win.GetSystemMetrics(win.SM_CXSCREEN) / FONT_WIDTH)
+	height int = int(win.GetSystemMetrics(win.SM_CYSCREEN) / (FONT_HEIGHT*2))
+	bsChart widgets.BarChart
+	qsChart widgets.BarChart
+	m sync.Mutex
+
+	bsTime time.Duration
+	bsSwaps = 0
+	bsComparisons = 0
+	bsIterations = 0
+
+	qsTime time.Duration
+	qsSwaps = 0
+	qsComparisons = 0
+	qsIterations = 0
+)
+
 
 func main() {
 	barNumber := width / BAR_WIDTH - 1
-	fmt.Print("Indique el tamaño del slice(Se recomienda que contenga " + strconv.Itoa(barNumber) +" elementos para una visualizacion correcta): ")
-	var first int
-	fmt.Scanln(&first)
-	slice := randomSlice(MAX_PRIME, first)
+	fmt.Print("Indique la cantidad de numeros(Se recomienda " + strconv.Itoa(barNumber) +" maximo para una visualizacion correcta): ")
+	var size int
+	fmt.Scanln(&size)
 	if err := ui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v", err)
 	}
-	defer ui.Close()
-	initBsChart(slice)
-	initQsChart(slice)
+	baseSlice := randomSlice(size)
+	initBsChart(baseSlice)
+	initQsChart(baseSlice)
 	ui.Render(&bsChart)
 	ui.Render(&qsChart)
-	go bsChartDrawer(slice)
-	go qsChartDrawer(slice)
-	fmt.Scanln()
+	go bsChartDrawer(baseSlice)
+	qsChartDrawer(baseSlice)
+	fmt.Scanln() //end until any key is pressed
+	ui.Close()
 }
 
 /*
-Generates a prime number from the system hour
+Generates a 3 digit number between 0-559 from the system hour
 */
 func generateSeed() int{
-	return 111
+	currentTime := time.Now()
+	seed := currentTime.Format(":05.0")
+	var regex = regexp.MustCompile("[0-9]+")
+	bytes := regex.FindAll([]byte(seed),2)
+	num, _ := strconv.Atoi(string(bytes[0])+string(bytes[1]))
+	return num
 }
 
 /*
-creates a N size slice with random numbers based on the linear congruential method using only the seed as param
+creates a N size slice with random numbers based on the linear congruential method
 output: slice with N random integers
 */
-func randomSlice(seed int, size int) []float64{
+func randomSlice(size int) []float64{
 	var slice = make([]float64, size)
 	var m = int(math.Pow(2, MAX_NUMBER_SIZE))  // modulus
 	var a = 22695477                    // multiplier
 	var c = 1                           //increment
+	seed := generateSeed()
 	for i := 0; i < size; i++ {
 		seed = (a * seed + c) % m
 		slice[i] = float64(seed % MAX_NUMBER_SIZE) //cast to make the slice values compatible with the barChart
@@ -95,37 +112,49 @@ func remove(slice [][]int, index int) [][]int {
 }
 
 func bubbleSort(slice []float64, pair chan []int){
+	initTime := time.Now()
 	n := len(slice) - 1
 	for true {
 		swapped := false
 		for i := 0; i < n; i++{
+			bsComparisons++
 			if slice[i] > slice[i+1]{
 				pair <- []int{i, i+1}
+				bsSwaps++
 				swapped = true
 			}
 		}
+		bsIterations++
 		if !swapped{
 			break
 		}
 		n--
 	}
 	close(pair)
+	bsTime = time.Since(initTime)
 }
 
 func partition(slice []float64, start int, end int, pair chan []int) int {
 	pivot := slice[end]
 	index := start
 	for i := start; i < end; i++{
+		qsComparisons++
 		if slice[i] <= pivot{
 			pair <- []int{i,index}
+			qsSwaps++
 			index++
 		}
 	}
 	pair <- []int{index,end}
+	qsSwaps++
 	return index
 }
 
+/*
+Iterative quicksort
+ */
 func quickSort(slice []float64, size int, pair chan []int) {
+	initTime := time.Now()
 	var stack [][]int
 	start := 0
 	end := size
@@ -134,30 +163,23 @@ func quickSort(slice []float64, size int, pair chan []int) {
 		start, end = stack[0][0],stack[0][1]
 		stack = remove(stack, 0)
 		pivot := partition(slice, start, end, pair)
-
+		qsComparisons++
 		if pivot-1 > start {
 			stack = append(stack, []int{start,pivot-1})
 		}
+		qsComparisons++
 		if pivot+1 < end {
 			stack = append(stack, []int{pivot+1,end})
 		}
+		qsIterations++
 	}
 	close(pair)
+	qsTime = time.Since(initTime)
 }
 
-func qsChartDrawer(slice []float64){
-	qsChart.Data = make([]float64, len(slice))
-	copy(qsChart.Data, slice)
-	pairsChannel := make(chan []int)
-	go quickSort(qsChart.Data, len(slice)-1, pairsChannel)
-	for pair := range pairsChannel{
-		swap(&qsChart.Data[pair[0]], &qsChart.Data[pair[1]])
-		m.Lock()
-		ui.Render(&qsChart)
-		m.Unlock()
-	}
-}
-
+/*
+Bubblesort graphic drawer
+ */
 func bsChartDrawer(slice []float64)  {
 	bsChart.Data = make([]float64, len(slice))
 	copy(bsChart.Data, slice)
@@ -169,6 +191,38 @@ func bsChartDrawer(slice []float64)  {
 		ui.Render(&bsChart)
 		m.Unlock()
 	}
+	bsChart.Title = "BubbleSort-Finalizado-" +
+		"Tiempo:"+strconv.FormatInt(bsTime.Milliseconds(),10)+"ms-" +
+		"Swaps:"+strconv.Itoa(bsSwaps)+"-" +
+		"Comparaciones:"+strconv.Itoa(bsComparisons)+"-"+
+		"Iteraciones:"+strconv.Itoa(bsIterations)
+	m.Lock()
+	ui.Render(&bsChart)
+	m.Unlock()
+}
+
+/*
+Quicksort graphic drawer
+*/
+func qsChartDrawer(slice []float64){
+	qsChart.Data = make([]float64, len(slice))
+	copy(qsChart.Data, slice)
+	pairsChannel := make(chan []int)
+	go quickSort(qsChart.Data, len(slice)-1, pairsChannel)
+	for pair := range pairsChannel{
+		swap(&qsChart.Data[pair[0]], &qsChart.Data[pair[1]])
+		m.Lock()
+		ui.Render(&qsChart)
+		m.Unlock()
+	}
+	qsChart.Title = "QuickSort-Finalizado-" +
+		"Tiempo:"+strconv.FormatInt(qsTime.Milliseconds(),10)+"ms-" +
+		"Swaps:"+strconv.Itoa(qsSwaps)+"-" +
+		"Comparaciones:"+strconv.Itoa(qsComparisons)+"-"+
+		"Iteraciones:"+strconv.Itoa(qsIterations)
+	m.Lock()
+	ui.Render(&qsChart)
+	m.Unlock()
 }
 
 func generateLabels(slice []float64) []string {
@@ -198,7 +252,7 @@ func initQsChart(slice []float64){
 	qsChart.Data = slice
 	qsChart.Title = "QuickSort"
 	qsChart.SetRect(0, height-2, width, height*2 - 3)
-	qsChart.BarWidth = 3
+	qsChart.BarWidth = BAR_WIDTH
 	qsChart.BarGap = 0
 	qsChart.Labels = generateLabels(slice)
 	qsChart.LabelStyles = []ui.Style{ui.NewStyle(ui.ColorWhite)}

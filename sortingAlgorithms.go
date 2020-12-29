@@ -2,8 +2,8 @@
 Notas:
 1. Para una visualización correcta del gráfico de barras, por favor ejecutar el programa
 en una terminal a pantalla completa.
-2. Para ejecutar de nuevo, presionar una tecla distinta de 0 y enter luego de que ambos algoritmos hayan acabado.
 https://www.geeksforgeeks.org/iterative-quick-sort/
+https://tecadmin.net/get-current-date-time-golang/
 */
 
 package main
@@ -67,7 +67,7 @@ func main() {
 }
 
 /*
-Generates a 3 digit number between 0-559 from the system hour
+Generates a 3 digit number between 0-599 from the system hour
 */
 func generateSeed() int{
 	currentTime := time.Now()
